@@ -12,6 +12,8 @@ app = Flask(__name__)
 MQTT_BROKER = os.getenv('MQTT_BROKER')
 MQTT_PORT = int(os.getenv('MQTT_PORT'))
 MQTT_TOPIC = os.getenv('MQTT_TOPIC')
+MQTT_USERNAME = os.getenv('MQTT_USERNAME')
+MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
 
 # Stato della lampadina
 lamp_status = {'is_on': False}
@@ -19,14 +21,25 @@ lamp_status = {'is_on': False}
 # Callback per la connessione MQTT
 def on_connect(client, userdata, flags, rc):
     print(f"Connected with result code {rc}")
+    client.subscribe(MQTT_TOPIC)  # Sottoscrivi al topic
 
 # Callback per i messaggi MQTT
 def on_message(client, userdata, msg):
+    global lamp_status
     print(f"Message received: {msg.topic} {msg.payload}")
+    if msg.topic == MQTT_TOPIC:
+        message = msg.payload.decode('utf-8')
+        if message == 'on':
+            lamp_status['is_on'] = True
+        elif message == 'off':
+            lamp_status['is_on'] = False
 
 mqtt_client = mqtt.Client()
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
+
+# Configura il client MQTT con nome utente e password
+mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 
 try:
     mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
