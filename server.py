@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, json, request, jsonify
 import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
 import os
@@ -57,7 +57,7 @@ def on_message(client, userdata, msg):
             'device_id': device_id,
             'status': status,
             'timestamp': datetime.utcnow(),
-            'username': 'system'  # Puoi aggiornare questo valore con l'utente attualmente loggato
+            'username': data['user']  
         })
 
 mqtt_client = mqtt.Client()
@@ -89,6 +89,7 @@ def get_device(device_id):
 def update_device(device_id):
     data = request.json
     status = data.get('status')
+    user = data.get('user')
     devices_collection.update_one(
         {'device_id': device_id},
         {'$set': {'status': status}},
@@ -98,7 +99,7 @@ def update_device(device_id):
         'device_id': device_id,
         'status': status,
         'timestamp': datetime.utcnow(),
-        'username': 'system'  # Puoi aggiornare questo valore con l'utente attualmente loggato
+        'username': user  # get the user from the request
     })
     mqtt_client.publish(f"device/{device_id}", json.dumps(status))
     return jsonify({'status': 'success'})
