@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 import os
 import pymongo
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 
 load_dotenv()
@@ -61,7 +61,7 @@ def on_message(client, userdata, msg):
         audit_collection.insert_one({
             'device_id': device_id,
             'status': status,
-            'timestamp': datetime.now(datetime.timezone.utc),
+            'timestamp': datetime.now(timezone.utc),
             'username': get_jwt_identity()  # Get JWT token
         })
 
@@ -109,7 +109,7 @@ def update_device(device_id):
     audit_collection.insert_one({
         'device_id': device_id,
         'status': status,
-        'timestamp': datetime.now(datetime.timezone.utc),
+        'timestamp': datetime.now(timezone.utc),
         'username': get_jwt_identity()  # JWT Get user from JWT token
     })
     mqtt_client.publish(f"device/{device_id}", json.dumps(status))
