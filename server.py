@@ -109,7 +109,7 @@ def update_device(device_id):
     audit_collection.insert_one({
         'device_id': device_id,
         'status': status,
-        'timestamp': datetime.utcnow(),
+        'timestamp': datetime.now(datetime.timezone.utc),
         'username': get_jwt_identity()  # JWT Get user from JWT token
     })
     mqtt_client.publish(f"device/{device_id}", json.dumps(status))
