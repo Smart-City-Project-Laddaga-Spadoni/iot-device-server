@@ -1,0 +1,7 @@
+Flask
+pytest
+pytest-mock
+python-dotenv
+paho-mqtt
+pymongo
+flask-jwt-extended
