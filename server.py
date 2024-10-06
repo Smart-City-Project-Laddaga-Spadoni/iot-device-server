@@ -148,5 +148,9 @@ def login():
         return jsonify({'status': 'success', 'access_token': access_token})
     return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401
 
+@app.route('/ping', methods=['GET'])
+def ping():
+    return jsonify({'status': 'success', 'message': 'Server is running'}), 200
+
 if __name__ == '__main__':
     app.run(host=os.getenv('FLASK_RUN_HOST'), port=int(os.getenv('FLASK_RUN_PORT')))
