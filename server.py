@@ -1,4 +1,5 @@
 from flask import Flask, json, request, jsonify
+from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
 import os
@@ -10,6 +11,7 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 load_dotenv()
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # MongoDB
 MONGODB_URI = os.getenv('MONGODB_URI')
@@ -64,6 +66,7 @@ def on_message(client, userdata, msg):
             'timestamp': datetime.now(timezone.utc),
             'username': get_jwt_identity()  # Get JWT token
         })
+        socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
 
 mqtt_client = mqtt.Client()
 mqtt_client.on_connect = on_connect
@@ -113,6 +116,7 @@ def update_device(device_id):
         'username': get_jwt_identity()  # JWT Get user from JWT token
     })
     mqtt_client.publish(f"device/{device_id}", json.dumps(status))
+    socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
     return jsonify({'status': 'success'})
 
 @app.route('/signup', methods=['POST'])
@@ -153,4 +157,4 @@ def ping():
     return jsonify({'status': 'success', 'message': 'Server is running'}), 200
 
 if __name__ == '__main__':
-    app.run(host=os.getenv('FLASK_RUN_HOST'), port=int(os.getenv('FLASK_RUN_PORT')))
+    socketio.run(app, host=os.getenv('FLASK_RUN_HOST', '0.0.0.0'), port=int(os.getenv('FLASK_RUN_PORT', 5000)))
