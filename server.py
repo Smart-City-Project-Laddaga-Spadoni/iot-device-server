@@ -36,20 +36,21 @@ MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
 # Callback for MQTT connection
 def on_connect(client, userdata, flags, rc):
     print(f"Connected with result code {rc}")
-    client.subscribe("signin")  # signin topic
+    client.subscribe("device/signin")  # signin topic
+    client.subscribe("device/+")  # device topic
 
 # Callback for MQTT messages
 def on_message(client, userdata, msg):
     print(f"Message received: {msg.topic} {msg.payload}")
     message = msg.payload.decode('utf-8')
-    if msg.topic == "signin":
+    if msg.topic == "device/signin":
         data = json.loads(message)
         device_id = data['device_id']
         device = devices_collection.find_one({'device_id': device_id})
         if device:
             status = device['status']
         else:
-            status = {'is_on': False}
+            status = {'is_on': False, "brightness": 50}
             devices_collection.insert_one({'device_id': device_id, 'status': status})
         mqtt_client.publish(f"device/{device_id}", json.dumps(status))
     else:
@@ -64,7 +65,7 @@ def on_message(client, userdata, msg):
             'device_id': device_id,
             'status': status,
             'timestamp': datetime.now(timezone.utc),
-            'username': get_jwt_identity()  # Get JWT token
+            #'username': get_jwt_identity()  # Get JWT token
         })
         socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
 
@@ -73,7 +74,7 @@ mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
 
 # MQTT client connection to broker with username and password
-mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+#mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 
 try:
     mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
