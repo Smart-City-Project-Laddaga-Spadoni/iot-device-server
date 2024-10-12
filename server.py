@@ -37,7 +37,7 @@ MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
 def on_connect(client, userdata, flags, rc):
     print(f"Connected with result code {rc}")
     client.subscribe("device/signin")  # signin topic
-    client.subscribe("device/+")  # device topic
+    client.subscribe("device/+/stateChange")  # device state changes topic
 
 # Callback for MQTT messages
 def on_message(client, userdata, msg):
@@ -52,7 +52,7 @@ def on_message(client, userdata, msg):
         else:
             status = {'is_on': False, "brightness": 50}
             devices_collection.insert_one({'device_id': device_id, 'status': status})
-        mqtt_client.publish(f"device/{device_id}", json.dumps(status))
+        mqtt_client.publish(f"device/{device_id}/stateChange", json.dumps(status))
     else:
         device_id = msg.topic.split('/')[1]
         status = json.loads(message)
