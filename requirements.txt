@@ -1,7 +1,7 @@
-Flask
-pytest
-pytest-mock
-python-dotenv
-paho-mqtt
-pymongo
-flask-jwt-extended
+Flask==2.0.1
+Flask-SocketIO==5.1.1
+paho-mqtt==1.5.1
+python-dotenv==0.19.0
+pymongo==3.12.0
+Werkzeug==2.0.1
+Flask-JWT-Extended==4.3.1
