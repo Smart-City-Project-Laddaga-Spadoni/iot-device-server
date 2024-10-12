@@ -65,7 +65,7 @@ def on_message(client, userdata, msg):
             'device_id': device_id,
             'status': status,
             'timestamp': datetime.now(timezone.utc),
-            #'username': get_jwt_identity()  # Get JWT token
+            'username': f"Bulbs simulator app"
         })
         socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
 
