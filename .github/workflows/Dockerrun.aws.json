@@ -1,0 +1,18 @@
+{
+    "AWSEBDockerrunVersion": "1",
+    "Image": {
+      "Name": "272154733490.dkr.ecr.eu-north-1.amazonaws.com/myapp:latest",
+      "Update": "true"
+    },
+    "Ports": [
+      {
+        "ContainerPort": "5000"
+      }
+    ],
+    "Volumes": [],
+    "Logging": "/var/log/nginx",
+    "LaunchTemplate": {
+      "LaunchTemplateName": "iot-device-launch-template",
+      "Version": "2"
+    }
+  }
