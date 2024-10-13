@@ -7,3 +7,4 @@ paho-mqtt
 pymongo
 Werkzeug
 flask-jwt-extended
+boto3

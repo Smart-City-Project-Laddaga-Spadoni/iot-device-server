@@ -7,14 +7,30 @@ import pymongo
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone, timedelta
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+import boto3  # AWS SDK for Python
+import json as js  # To handle JSON data
 
 load_dotenv()
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
+# Recupera i segreti da AWS Secrets Manager
+def get_secrets(secret_name, region_name="eu-north-1"):
+    client = boto3.client('secretsmanager', region_name=region_name)
+    try:
+        response = client.get_secret_value(SecretId=secret_name)
+        secrets = js.loads(response['SecretString'])
+        return secrets
+    except Exception as e:
+        print(f"Error retrieving secrets: {e}")
+        return {}
+
+# Recupera i segreti
+secrets = get_secrets("MyAppSecrets")
+
 # MongoDB
-MONGODB_URI = os.getenv('MONGODB_URI')
+MONGODB_URI = os.getenv('MONGODB_URI', secrets.get('MONGODB_URI'))
 MONGODB_DBNAME = os.getenv('MONGODB_DBNAME')
 client = pymongo.MongoClient(MONGODB_URI)
 db = client[MONGODB_DBNAME]
@@ -23,15 +39,48 @@ devices_collection = db['Devices']
 audit_collection = db['Audit']
 
 # JWT
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'default_secret_key')
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', secrets.get('JWT_SECRET_KEY', 'default_secret_key'))
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600)))
 jwt = JWTManager(app)
 
-# MQTT
+# MQTT settings
 MQTT_BROKER = os.getenv('MQTT_BROKER')
-MQTT_PORT = int(os.getenv('MQTT_PORT'))
+MQTT_PORT = int(os.getenv('MQTT_PORT', 8883))  # Default MQTT port for SSL/TLS
+
+# Get username and password from environment variables
 MQTT_USERNAME = os.getenv('MQTT_USERNAME')
 MQTT_PASSWORD = os.getenv('MQTT_PASSWORD')
+
+# Initialize MQTT client
+mqtt_client = mqtt.Client()
+
+# If username and password are provided, use them for authentication
+if MQTT_USERNAME and MQTT_PASSWORD:
+    mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
+else:
+    # If not present, retrieve the secret from AWS Secrets Manager
+    secret_name = "MyIoTDeviceKeysSC"
+    region_name = "eu-north-1"
+
+    # Create a Secrets Manager client
+    client = boto3.client('secretsmanager', region_name=region_name)
+
+    try:
+        # Retrieve the secret
+        response = client.get_secret_value(SecretId=secret_name)
+        secrets = js.loads(response['SecretString'])  # Load the secret as JSON
+
+        # Extract MQTT credentials from the secret
+        # You might have to adjust the keys based on your secret structure
+        mqtt_private_key = secrets['mqtt_private_key']  # Path to your private key
+        mqtt_cert = secrets['mqtt_cert']  # Path to your certificate
+        mqtt_root_ca = secrets['mqtt_root_ca']  # Path to your CA root certificate
+
+        # Load certificates for MQTT connection
+        mqtt_client.tls_set(ca_certs=mqtt_root_ca, certfile=mqtt_cert, keyfile=mqtt_private_key)
+
+    except Exception as e:
+        print(f"Error retrieving secrets: {e}")
 
 # Callback for MQTT connection
 def on_connect(client, userdata, flags, rc):
@@ -68,13 +117,7 @@ def on_message(client, userdata, msg):
         })
         socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
 
-mqtt_client = mqtt.Client()
-mqtt_client.on_connect = on_connect
-mqtt_client.on_message = on_message
-
-# MQTT client connection to broker with username and password
-mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
-
+# Connect to the MQTT broker
 try:
     mqtt_client.connect(MQTT_BROKER, MQTT_PORT, 60)
     mqtt_client.loop_start()
