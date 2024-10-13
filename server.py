@@ -116,7 +116,7 @@ def update_device(device_id):
         'timestamp': datetime.now(timezone.utc),
         'username': get_jwt_identity()  # JWT Get user from JWT token
     })
-    mqtt_client.publish(f"device/{device_id}", json.dumps(status))
+    mqtt_client.publish(f"device/{device_id}/stateChange", json.dumps(status))
     socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
     return jsonify({'status': 'success'})
 
