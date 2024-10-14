@@ -85,37 +85,39 @@ else:
 # Callback for MQTT connection
 def on_connect(client, userdata, flags, rc):
     print(f"Connected with result code {rc}")
-    client.subscribe("signin")  # signin topic
+    client.subscribe("device/+/signin")  # signin topic
+    client.subscribe("device/+/stateChange")  # device state changes topic
 
 # Callback for MQTT messages
 def on_message(client, userdata, msg):
     print(f"Message received: {msg.topic} {msg.payload}")
     message = msg.payload.decode('utf-8')
-    if msg.topic == "signin":
-        data = json.loads(message)
-        device_id = data['device_id']
+    data = json.loads(message)
+    device_id = msg.topic.split('/')[1]
+    if msg.topic.endswith("signin"): # qui devo prendere lo stato che arriva dal client
         device = devices_collection.find_one({'device_id': device_id})
         if device:
             status = device['status']
         else:
-            status = {'is_on': False}
-            devices_collection.insert_one({'device_id': device_id, 'status': status})
-        mqtt_client.publish(f"device/{device_id}", json.dumps(status))
+            status = data.get('status', None)
+            if status is not None:
+                devices_collection.insert_one({'device_id': device_id, 'status': status})
+        mqtt_client.publish(f"device/{device_id}/stateChange", json.dumps({'status': status}))
     else:
-        device_id = msg.topic.split('/')[1]
-        status = json.loads(message)
-        devices_collection.update_one(
-            {'device_id': device_id},
-            {'$set': {'status': status}},
-            upsert=True
-        )
-        audit_collection.insert_one({
-            'device_id': device_id,
-            'status': status,
-            'timestamp': datetime.now(timezone.utc),
-            'username': get_jwt_identity()  # Get JWT token
-        })
-        socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
+        status = data.get('status', None)
+        if status is not None:
+            devices_collection.update_one(
+                {'device_id': device_id},
+                {'$set': {'status': status}},
+                upsert=True
+            )
+            audit_collection.insert_one({
+                'device_id': device_id,
+                'status': status,
+                'timestamp': datetime.now(timezone.utc),
+                'username': f"Bulbs simulator app"
+            })
+            socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
 
 # Connect to the MQTT broker
 try:
@@ -158,7 +160,7 @@ def update_device(device_id):
         'timestamp': datetime.now(timezone.utc),
         'username': get_jwt_identity()  # JWT Get user from JWT token
     })
-    mqtt_client.publish(f"device/{device_id}", json.dumps(status))
+    mqtt_client.publish(f"device/{device_id}/stateChange", json.dumps(status))
     socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
     return jsonify({'status': 'success'})
 
