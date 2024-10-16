@@ -75,11 +75,11 @@ else:
 
             # Load certificates for MQTT connection
             def clean_key_or_cert(key_or_cert, begin_marker, end_marker):
-                key_or_cert = key_or_cert.replace(f"-----BEGIN {begin_marker}-----", f"-----BEGIN_{begin_marker.replace(" ","_")}-----")
-                key_or_cert = key_or_cert.replace(f"-----END {end_marker}-----", f"-----END_{end_marker.replace(" ","_")}-----")
+                key_or_cert = key_or_cert.replace(f"-----BEGIN {begin_marker}-----", f"-----BEGIN_{begin_marker.replace(' ', '_')}-----")
+                key_or_cert = key_or_cert.replace(f"-----END {end_marker}-----", f"-----END_{end_marker.replace(' ', '_')}-----")
                 key_or_cert = key_or_cert.replace(" ", "\r\n")
-                key_or_cert = key_or_cert.replace(f"-----BEGIN_{begin_marker.replace(" ","_")}-----", f"-----BEGIN {begin_marker}-----")
-                key_or_cert = key_or_cert.replace(f"-----END_{end_marker.replace(" ","_")}-----", f"-----END {end_marker}-----\r\n")
+                key_or_cert = key_or_cert.replace(f"-----BEGIN_{begin_marker.replace(' ', '_')}-----", f"-----BEGIN {begin_marker}-----")
+                key_or_cert = key_or_cert.replace(f"-----END_{end_marker.replace(' ', '_')}-----", f"-----END {end_marker}-----\r\n")
                 return key_or_cert
             
             # Ensure the private key is correctly formatted
