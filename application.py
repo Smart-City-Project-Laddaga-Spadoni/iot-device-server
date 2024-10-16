@@ -13,8 +13,8 @@ import tempfile
 
 load_dotenv()
 
-app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+application = Flask(__name__) 
+socketio = SocketIO(application, cors_allowed_origins="*")
 
 # Retrieve secrets from AWS Secrets Manager
 def get_secrets(secret_name, region_name="eu-north-1"):
@@ -27,7 +27,7 @@ def get_secrets(secret_name, region_name="eu-north-1"):
         print(f"Error retrieving secrets: {e}")
         return {}
 
-region_name =  os.getenv('AWS_REGION_NAME', 'eu-north-1')
+region_name = os.getenv('AWS_REGION_NAME', 'eu-north-1')
 secrets = get_secrets("MyIoTDeviceKeysSC", region_name)
 
 # MongoDB
@@ -40,13 +40,13 @@ devices_collection = db['Devices']
 audit_collection = db['Audit']
 
 # JWT
-app.config['JWT_SECRET_KEY'] = secrets.get('JWT_SECRET_KEY', os.getenv('JWT_SECRET_KEY', 'default_secret_key'))
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=int(secrets.get('JWT_ACCESS_TOKEN_EXPIRES', os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600))))
-jwt = JWTManager(app)
+application.config['JWT_SECRET_KEY'] = secrets.get('JWT_SECRET_KEY', os.getenv('JWT_SECRET_KEY', 'default_secret_key'))
+application.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=int(secrets.get('JWT_ACCESS_TOKEN_EXPIRES', os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600))))
+jwt = JWTManager(application)
 
 # MQTT settings
 MQTT_BROKER = secrets.get('MQTT_BROKER', os.getenv('MQTT_BROKER'))
-MQTT_PORT = int(secrets.get('MQTT_PORT', os.getenv('MQTT_PORT', 8883)))  # Default MQTT port for SSL/TLS  # Default MQTT port for SSL/TLS
+MQTT_PORT = int(secrets.get('MQTT_PORT', os.getenv('MQTT_PORT', 8883)))  # Default MQTT port for SSL/TLS
 
 print(f"MQTT_BROKER : {MQTT_BROKER}:{MQTT_PORT}")
 
@@ -66,12 +66,10 @@ else:
     local_ca_path = os.getenv('MQTT_CA_PATH')
     if not local_private_key_path or not local_cert_path or not local_ca_path:
         try:
-            
             # Extract MQTT credentials from the secret
-            # You might have to adjust the keys based on your secret structure
-            mqtt_private_key = secrets['mqtt_private_key']  # Path to your private key
-            mqtt_cert = secrets['mqtt_cert']  # Path to your certificate
-            mqtt_root_ca = secrets['mqtt_root_ca']  # Path to your CA root certificate
+            mqtt_private_key = secrets['mqtt_private_key']
+            mqtt_cert = secrets['mqtt_cert']
+            mqtt_root_ca = secrets['mqtt_root_ca']
 
             # Load certificates for MQTT connection
             def clean_key_or_cert(key_or_cert, begin_marker, end_marker):
@@ -81,12 +79,11 @@ else:
                 key_or_cert = key_or_cert.replace(f"-----BEGIN_{begin_marker.replace(' ', '_')}-----", f"-----BEGIN {begin_marker}-----")
                 key_or_cert = key_or_cert.replace(f"-----END_{end_marker.replace(' ', '_')}-----", f"-----END {end_marker}-----\r\n")
                 return key_or_cert
-            
+
             # Ensure the private key is correctly formatted
             mqtt_private_key = clean_key_or_cert(mqtt_private_key, "RSA PRIVATE KEY", "RSA PRIVATE KEY")
             mqtt_cert = clean_key_or_cert(mqtt_cert, "CERTIFICATE", "CERTIFICATE")
             mqtt_root_ca = clean_key_or_cert(mqtt_root_ca, "CERTIFICATE", "CERTIFICATE")
-            
 
             # Save the certificates to temporary files
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as key_file:
@@ -100,11 +97,11 @@ else:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as ca_file:
                 ca_file.write(mqtt_root_ca.encode())
                 ca_file_path = ca_file.name
-        
+
         except Exception as e:
             print(f"Error retrieving secrets: {e}")
 
-    try:   
+    try:
         # Load certificates for MQTT connection
         mqtt_client.tls_set(ca_certs=ca_file_path, certfile=cert_file_path, keyfile=key_file_path)
     except Exception as e:
@@ -162,13 +159,13 @@ except ConnectionRefusedError:
 
 # API Rest
 
-@app.route('/devices', methods=['GET'])
+@application.route('/devices', methods=['GET'])
 @jwt_required()
 def get_devices():
     devices = list(devices_collection.find({}, {'_id': 0}))
     return jsonify(devices)
 
-@app.route('/device/<device_id>', methods=['GET'])
+@application.route('/device/<device_id>', methods=['GET'])
 @jwt_required()
 def get_device(device_id):
     device = devices_collection.find_one({'device_id': device_id}, {'_id': 0})
@@ -176,7 +173,7 @@ def get_device(device_id):
         return jsonify(device)
     return jsonify({'status': 'error', 'message': 'Device not found'}), 404
 
-@app.route('/device/<device_id>', methods=['POST'])
+@application.route('/device/<device_id>', methods=['POST'])
 @jwt_required()
 def update_device(device_id):
     data = request.json
@@ -198,7 +195,7 @@ def update_device(device_id):
     socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
     return jsonify({'status': 'success'})
 
-@app.route('/signup', methods=['POST'])
+@application.route('/signup', methods=['POST'])
 def signup():
     data = request.json
     username = data.get('username')
@@ -220,7 +217,7 @@ def signup():
     users_collection.insert_one({'username': username, 'password': hashed_password})
     return jsonify({'status': 'success'})
 
-@app.route('/login', methods=['POST'])
+@application.route('/login', methods=['POST'])
 def login():
     data = request.json
     username = data.get('username')
@@ -231,9 +228,9 @@ def login():
         return jsonify({'status': 'success', 'access_token': access_token})
     return jsonify({'status': 'error', 'message': 'Invalid credentials'}), 401
 
-@app.route('/ping', methods=['GET'])
+@application.route('/ping', methods=['GET'])
 def ping():
     return jsonify({'status': 'success', 'message': 'Server is running'}), 200
 
 if __name__ == '__main__':
-    socketio.run(app, host=os.getenv('FLASK_RUN_HOST', '0.0.0.0'), port=int(os.getenv('FLASK_RUN_PORT', 5000)))
+    socketio.run(application, host=os.getenv('FLASK_RUN_HOST', '0.0.0.0'), port=int(os.getenv('FLASK_RUN_PORT', 5000)))
