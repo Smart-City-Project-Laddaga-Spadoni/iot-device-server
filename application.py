@@ -8,14 +8,15 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone, timedelta
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 import boto3  # AWS SDK for Python
-import json as js  # To handle JSON data
+import json as js
+import tempfile
 
 load_dotenv()
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# Recupera i segreti da AWS Secrets Manager
+# Retrieve secrets from AWS Secrets Manager
 def get_secrets(secret_name, region_name="eu-north-1"):
     client = boto3.client('secretsmanager', region_name=region_name)
     try:
@@ -26,12 +27,12 @@ def get_secrets(secret_name, region_name="eu-north-1"):
         print(f"Error retrieving secrets: {e}")
         return {}
 
-# Recupera i segreti
-secrets = get_secrets("MyAppSecrets")
+region_name =  os.getenv('AWS_REGION_NAME', 'eu-north-1')
+secrets = get_secrets("MyIoTDeviceKeysSC", region_name)
 
 # MongoDB
-MONGODB_URI = os.getenv('MONGODB_URI', secrets.get('MONGODB_URI'))
-MONGODB_DBNAME = os.getenv('MONGODB_DBNAME')
+MONGODB_URI = secrets.get('MONGODB_URI', os.getenv('MONGODB_URI'))
+MONGODB_DBNAME = secrets.get('MONGODB_DBNAME', os.getenv('MONGODB_DBNAME'))
 client = pymongo.MongoClient(MONGODB_URI)
 db = client[MONGODB_DBNAME]
 users_collection = db['Users']
@@ -39,13 +40,15 @@ devices_collection = db['Devices']
 audit_collection = db['Audit']
 
 # JWT
-app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', secrets.get('JWT_SECRET_KEY', 'default_secret_key'))
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600)))
+app.config['JWT_SECRET_KEY'] = secrets.get('JWT_SECRET_KEY', os.getenv('JWT_SECRET_KEY', 'default_secret_key'))
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(seconds=int(secrets.get('JWT_ACCESS_TOKEN_EXPIRES', os.getenv('JWT_ACCESS_TOKEN_EXPIRES', 3600))))
 jwt = JWTManager(app)
 
 # MQTT settings
-MQTT_BROKER = os.getenv('MQTT_BROKER')
-MQTT_PORT = int(os.getenv('MQTT_PORT', 8883))  # Default MQTT port for SSL/TLS
+MQTT_BROKER = secrets.get('MQTT_BROKER', os.getenv('MQTT_BROKER'))
+MQTT_PORT = int(secrets.get('MQTT_PORT', os.getenv('MQTT_PORT', 8883)))  # Default MQTT port for SSL/TLS  # Default MQTT port for SSL/TLS
+
+print(f"MQTT_BROKER : {MQTT_BROKER}:{MQTT_PORT}")
 
 # Get username and password from environment variables
 MQTT_USERNAME = os.getenv('MQTT_USERNAME')
@@ -58,29 +61,54 @@ mqtt_client = mqtt.Client()
 if MQTT_USERNAME and MQTT_PASSWORD:
     mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 else:
-    # If not present, retrieve the secret from AWS Secrets Manager
-    secret_name = "MyIoTDeviceKeysSC"
-    region_name = "eu-north-1"
+    local_private_key_path = os.getenv('MQTT_PRIVATE_KEY_PATH')
+    local_cert_path = os.getenv('MQTT_CERT_PATH')
+    local_ca_path = os.getenv('MQTT_CA_PATH')
+    if not local_private_key_path or not local_cert_path or not local_ca_path:
+        try:
+            
+            # Extract MQTT credentials from the secret
+            # You might have to adjust the keys based on your secret structure
+            mqtt_private_key = secrets['mqtt_private_key']  # Path to your private key
+            mqtt_cert = secrets['mqtt_cert']  # Path to your certificate
+            mqtt_root_ca = secrets['mqtt_root_ca']  # Path to your CA root certificate
 
-    # Create a Secrets Manager client
-    client = boto3.client('secretsmanager', region_name=region_name)
+            # Load certificates for MQTT connection
+            def clean_key_or_cert(key_or_cert, begin_marker, end_marker):
+                key_or_cert = key_or_cert.replace(f"-----BEGIN {begin_marker}-----", f"-----BEGIN_{begin_marker.replace(" ","_")}-----")
+                key_or_cert = key_or_cert.replace(f"-----END {end_marker}-----", f"-----END_{end_marker.replace(" ","_")}-----")
+                key_or_cert = key_or_cert.replace(" ", "\r\n")
+                key_or_cert = key_or_cert.replace(f"-----BEGIN_{begin_marker.replace(" ","_")}-----", f"-----BEGIN {begin_marker}-----")
+                key_or_cert = key_or_cert.replace(f"-----END_{end_marker.replace(" ","_")}-----", f"-----END {end_marker}-----\r\n")
+                return key_or_cert
+            
+            # Ensure the private key is correctly formatted
+            mqtt_private_key = clean_key_or_cert(mqtt_private_key, "RSA PRIVATE KEY", "RSA PRIVATE KEY")
+            mqtt_cert = clean_key_or_cert(mqtt_cert, "CERTIFICATE", "CERTIFICATE")
+            mqtt_root_ca = clean_key_or_cert(mqtt_root_ca, "CERTIFICATE", "CERTIFICATE")
+            
 
-    try:
-        # Retrieve the secret
-        response = client.get_secret_value(SecretId=secret_name)
-        secrets = js.loads(response['SecretString'])  # Load the secret as JSON
+            # Save the certificates to temporary files
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as key_file:
+                key_file.write(mqtt_private_key.encode())
+                key_file_path = key_file.name
 
-        # Extract MQTT credentials from the secret
-        # You might have to adjust the keys based on your secret structure
-        mqtt_private_key = secrets['mqtt_private_key']  # Path to your private key
-        mqtt_cert = secrets['mqtt_cert']  # Path to your certificate
-        mqtt_root_ca = secrets['mqtt_root_ca']  # Path to your CA root certificate
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as cert_file:
+                cert_file.write(mqtt_cert.encode())
+                cert_file_path = cert_file.name
 
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pem") as ca_file:
+                ca_file.write(mqtt_root_ca.encode())
+                ca_file_path = ca_file.name
+        
+        except Exception as e:
+            print(f"Error retrieving secrets: {e}")
+
+    try:   
         # Load certificates for MQTT connection
-        mqtt_client.tls_set(ca_certs=mqtt_root_ca, certfile=mqtt_cert, keyfile=mqtt_private_key)
-
+        mqtt_client.tls_set(ca_certs=ca_file_path, certfile=cert_file_path, keyfile=key_file_path)
     except Exception as e:
-        print(f"Error retrieving secrets: {e}")
+        print(f"Error creating tls mqtt client: {e}")
 
 # Callback for MQTT connection
 def on_connect(client, userdata, flags, rc):
@@ -90,34 +118,40 @@ def on_connect(client, userdata, flags, rc):
 
 # Callback for MQTT messages
 def on_message(client, userdata, msg):
-    print(f"Message received: {msg.topic} {msg.payload}")
-    message = msg.payload.decode('utf-8')
-    data = json.loads(message)
-    device_id = msg.topic.split('/')[1]
-    if msg.topic.endswith("signin"): # qui devo prendere lo stato che arriva dal client
-        device = devices_collection.find_one({'device_id': device_id})
-        if device:
-            status = device['status']
+    try:
+        print(f"Message received: {msg.topic} {msg.payload}")
+        message = msg.payload.decode('utf-8')
+        data = json.loads(message)
+        device_id = msg.topic.split('/')[1]
+        if msg.topic.endswith("signin"):
+            device = devices_collection.find_one({'device_id': device_id})
+            if device:
+                status = device['status']
+            else:
+                status = data.get('status', None)
+                if status is not None:
+                    devices_collection.insert_one({'device_id': device_id, 'status': status})
+            mqtt_client.publish(f"device/{device_id}/stateChange", json.dumps({'status': status}))
         else:
             status = data.get('status', None)
             if status is not None:
-                devices_collection.insert_one({'device_id': device_id, 'status': status})
-        mqtt_client.publish(f"device/{device_id}/stateChange", json.dumps({'status': status}))
-    else:
-        status = data.get('status', None)
-        if status is not None:
-            devices_collection.update_one(
-                {'device_id': device_id},
-                {'$set': {'status': status}},
-                upsert=True
-            )
-            audit_collection.insert_one({
-                'device_id': device_id,
-                'status': status,
-                'timestamp': datetime.now(timezone.utc),
-                'username': f"Bulbs simulator app"
-            })
-            socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
+                devices_collection.update_one(
+                    {'device_id': device_id},
+                    {'$set': {'status': status}},
+                    upsert=True
+                )
+                audit_collection.insert_one({
+                    'device_id': device_id,
+                    'status': status,
+                    'timestamp': datetime.now(timezone.utc),
+                    'username': f"Bulbs simulator app"
+                })
+                socketio.emit('device_status_update', {'device_id': device_id, 'status': status})
+    except Exception as e:
+        print(f"Error processing message: {e}")
+
+mqtt_client.on_connect = on_connect
+mqtt_client.on_message = on_message
 
 # Connect to the MQTT broker
 try:
