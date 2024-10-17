@@ -130,3 +130,5 @@ dmypy.json
 !.elasticbeanstalk/*.global.yml
 
 ~/.aws/credentials
+
+mqttCerts
