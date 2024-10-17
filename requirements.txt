@@ -8,3 +8,4 @@ pymongo
 Werkzeug
 flask-jwt-extended
 boto3
+eventlet
