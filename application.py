@@ -1,4 +1,4 @@
-from flask import Flask, json, request, jsonify
+from flask import Flask, json, request, jsonify, render_template
 from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
 from dotenv import load_dotenv
@@ -161,6 +161,25 @@ try:
 except ConnectionRefusedError:
     print("Connection to MQTT broker failed. Please ensure the broker is running and accessible.")
 
+# Check MQTT connection status
+def is_mqtt_connected():
+    try:
+        # Check if the MQTT client is connected
+        return mqtt_client.is_connected()
+    except Exception as e:
+        print(f"Error checking MQTT connection: {e}")
+        return False
+
+# Check MongoDB connection status
+def is_mongo_connected():
+    try:
+        # Check if the MongoDB client is connected
+        client.admin.command('ping')
+        return True
+    except Exception as e:
+        print(f"Error checking MongoDB connection: {e}")
+        return False
+
 # API Rest
 
 @application.route('/devices', methods=['GET'])
@@ -235,6 +254,32 @@ def login():
 @application.route('/ping', methods=['GET'])
 def ping():
     return jsonify({'status': 'success', 'message': 'Server is running'}), 200
+
+# Status endpoint
+
+@application.route('/status', methods=['GET'])
+def status():
+    try:
+        mqtt_status = is_mqtt_connected()
+    except Exception as e:
+        print(f"Error checking MQTT connection: {e}")
+        mqtt_status = False
+
+    try:
+        mongo_status = is_mongo_connected()
+    except Exception as e:
+        print(f"Error checking MongoDB connection: {e}")
+        mongo_status = False
+
+    return jsonify({
+        'server': 'Running',
+        'mqtt_connected': mqtt_status,
+        'mongo_connected': mongo_status
+    })
+
+@application.route('/status_page', methods=['GET'])
+def status_page():
+    return render_template('status.html')
 
 if __name__ == '__main__':
     socketio.run(application, host=os.getenv('FLASK_RUN_HOST', '0.0.0.0'), port=int(os.getenv('FLASK_RUN_PORT', 5000)))
