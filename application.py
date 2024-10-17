@@ -18,8 +18,8 @@ socketio = SocketIO(application, cors_allowed_origins="*")
 
 # Retrieve secrets from AWS Secrets Manager
 def get_secrets(secret_name, region_name="eu-north-1"):
-    client = boto3.client('secretsmanager', region_name=region_name)
     try:
+        client = boto3.client('secretsmanager', region_name=region_name)
         response = client.get_secret_value(SecretId=secret_name)
         secrets = js.loads(response['SecretString'])
         return secrets
