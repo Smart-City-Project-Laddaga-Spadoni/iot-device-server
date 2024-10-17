@@ -1,12 +1,13 @@
 import json
 import unittest
 from unittest.mock import patch, MagicMock
-from application import app, users_collection
+from application import application, users_collection  # Modificato
+
 from werkzeug.security import generate_password_hash
 
 class TestServer(unittest.TestCase):
     def setUp(self):
-        self.app = app.test_client()
+        self.app = application.app.test_client()  # Modificato
         self.app.testing = True
 
         # Create a test user in the mock database
