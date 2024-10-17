@@ -100,6 +100,10 @@ else:
 
         except Exception as e:
             print(f"Error retrieving secrets: {e}")
+    else:
+        key_file_path = local_private_key_path
+        cert_file_path = local_cert_path
+        ca_file_path = local_ca_path
 
     try:
         # Load certificates for MQTT connection
