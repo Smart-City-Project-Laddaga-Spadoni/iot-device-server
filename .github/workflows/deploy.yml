@@ -68,7 +68,7 @@ jobs:
         pip install -r requirements.txt
 
     - name: Zip source files
-      run: zip -r iot-device-server.zip .
+      run: zip -r iot-device-server.zip . --exclude .git\* --exclude .github\*
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
