@@ -132,3 +132,4 @@ dmypy.json
 ~/.aws/credentials
 
 mqttCerts
+iot-device-server.zip
