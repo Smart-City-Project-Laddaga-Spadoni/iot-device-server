@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .status {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Server Status</h1>
+    <div class="status" id="server-status">Server: Loading...</div>
+    <div class="status" id="mqtt-status">MQTT: Loading...</div>
+    <div class="status" id="mongo-status">MongoDB: Loading...</div>
+
+    <script>
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                document.getElementById('server-status').innerText = `Server: ${data.server}`;
+                document.getElementById('mqtt-status').innerText = `MQTT: ${data.mqtt_connected ? 'Connected' : 'Disconnected'}`;
+                document.getElementById('mongo-status').innerText = `MongoDB: ${data.mongo_connected ? 'Connected' : 'Disconnected'}`;
+            } catch (error) {
+                console.error('Error fetching status:', error);
+            }
+        }
+
+        fetchStatus();
+    </script>
+</body>
+</html>

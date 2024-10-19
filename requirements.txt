@@ -9,3 +9,4 @@ Werkzeug
 flask-jwt-extended
 boto3
 eventlet
+gunicorn
