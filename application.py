@@ -138,8 +138,7 @@ def on_message(client, userdata, msg):
             if status is not None:
                 devices_collection.update_one(
                     {'device_id': device_id},
-                    {'$set': {'status': status}},
-                    upsert=True
+                    {'$set': {'status': status}}
                 )
                 audit_collection.insert_one({
                     'device_id': device_id,
@@ -203,8 +202,7 @@ def update_device(device_id):
     status = data.get('status')
     result = devices_collection.update_one(
         {'device_id': device_id},
-        {'$set': {'status': status}},
-        upsert=True
+        {'$set': {'status': status}}
     )
     if result.matched_count == 0:
         return jsonify({'status': 'error', 'message': 'Device not found'}), 404
